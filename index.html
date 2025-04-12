@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>股票交易模拟</title>
+    <script src="./js/vue.js"></script>
+    <script src="./elementui/index.js"></script>
+    <link href="./elementui/index.css" rel="stylesheet" />
+    <script src="js/echarts5.min.js"></script>
+    <script src="js/axios.js"></script>
+    <link href="./css/mystyle.css" rel="stylesheet" />
+    <script src="./js/vintage.js"></script>
+  </head>
+  <body>
+    <div id="app">
+      <el-container>
+        <el-header height="280"
+          ><iframe
+            src="top.html"
+            width="100%"
+            height="280"
+            marginheight="0"
+            marginwidth="0"
+            frameborder="0"
+          ></iframe
+        ></el-header>
+        <el-container>
+          <el-aside width="400px">
+            <div class="btn-parent" v-if="!this.training">
+              <el-button type="primary" @click="start">
+                开始股票交易模拟训练
+              </el-button>
+            </div>
+            <h3 v-if="this.training">训练模式</h3>
+            <div class="asider" v-show="this.training">
+              <el-row>
+                <el-col :span="18">
+                  <el-select v-model="code" placeholder="请选择">
+                    <el-option
+                      v-for="item in codes"
+                      :key="item.code"
+                      :label="item.name"
+                      :value="item.code"
+                    >
+                      <span style="float: left">{{ item.name }}</span>
+                      <span
+                        style="float: right; color: #8492a6; font-size: 13px"
+                        >{{ item.code }}</span
+                      >
+                    </el-option>
+                  </el-select>
+                </el-col>
+              </el-row>
+              <el-row>
+                <el-col :span="18">
+                  <el-date-picker
+                    v-model="date"
+                    label="right"
+                    type="date"
+                    placeholder="选择日期"
+                    :picker-options="pickerOptions"
+                  >
+                  </el-date-picker>
+                </el-col>
+                <el-col :span="4">
+                  <el-button type="primary" plain @click="showK"
+                    >确认</el-button
+                  >
+                </el-col>
+              </el-row>
+              <el-row>
+                <el-col :span="6"> 初始资金 </el-col>
+                <el-col :span="14">
+                  <el-input v-model="begin" placeholder="请输入金额">
+                    <template slot="append">元</template>
+                  </el-input>
+                </el-col>
+              </el-row>
+              <el-row>
+                <el-col :span="6"> 手续费 </el-col>
+                <el-col :span="14">
+                  <el-input v-model="charge" placeholder="请输入手续费">
+                    <template slot="append">%</template>
+                  </el-input>
+                </el-col>
+              </el-row>
+              <el-row>
+                <el-col :span="12" :offset="6">
+                  <el-button type="danger" @click="dialogFormVisible = true"
+                    >买入</el-button
+                  >
+                  <el-button type="danger" @click="sell">卖出</el-button>
+                </el-col>
+              </el-row>
+              <el-row>
+                <el-col :span="8"
+                  ><el-button @click="next">下一K线</el-button></el-col
+                >
+                <el-col :span="8"
+                  ><el-button @click="">重新训练</el-button></el-col
+                >
+                <el-col :span="8"
+                  ><el-button @click="training=false"
+                    >关闭训练</el-button
+                  ></el-col
+                >
+              </el-row>
+              <el-row>
+                <el-col>初始资产： {{ begin }} 资产余额： {{ money }}</el-col>
+                <el-col>多头市值：0 空头市值：0</el-col>
+              </el-row>
+            </div>
+          </el-aside>
+          <el-main>
+            <div id="echarts"></div>
+          </el-main>
+        </el-container>
+        <el-footer height="100%" >
+          <el-tabs v-model="activeName">
+            <el-tab-pane label="持有品种" name="first">
+          
+              <el-table :data="records" style="width: 100%">
+                <el-table-column prop="now" label="购买时间" width="180">
+                </el-table-column>
+                <el-table-column prop="name" label="股票名称" width="180">
+                </el-table-column>
+                <el-table-column prop="code" label="股票代码" width="180">
+                </el-table-column>
+                <el-table-column prop="time" label="交易日" width="180">
+                </el-table-column>
+                <el-table-column prop="price" label="成本价" width="180">
+                </el-table-column>
+                <el-table-column prop="count" label="数量" width="180">
+                </el-table-column>
+                <el-table-column prop="total" label="交易额" width="180">
+                </el-table-column>
+                <el-table-column prop="float" label="浮盈" width="180">
+                </el-table-column>
+                <el-table-column prop="last" label="最后价格" width="180">
+                </el-table-column>
+                <el-table-column prop="charge" label="手续费" width="180">
+                </el-table-column>
+                <el-table-column prop="profit" label="盈亏" width="180">
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+            <el-tab-pane label="交易记录" name="second">交易记录</el-tab-pane>
+          </el-tabs>
+        </el-footer>
+      </el-container>
+
+      <el-dialog
+        title="买入信息"
+        :visible.sync="dialogFormVisible"
+        :modal="true"
+        :close-on-click-modal="false"
+      >
+        <el-form :model="form">
+          <el-form-item label="买入价格" label-width="120px">
+            <el-input
+              v-model="form.buyPrice"
+              autocomplete="off"
+              :disabled="true"
+            ></el-input>
+          </el-form-item>
+          <el-form-item label="可买数量(股)" label-width="120px">
+            <el-input
+              v-model="form.num"
+              autocomplete="off"
+              :disabled="true"
+            ></el-input>
+          </el-form-item>
+          <el-form-item label="可用资金(元)" label-width="120px">
+            <el-input
+              v-model="money"
+              autocomplete="off"
+              :disabled="true"
+            ></el-input>
+          </el-form-item>
+          <el-form-item label="买入数量(股)" label-width="120px">
+            <el-input
+              type="number"
+              v-model="form.count"
+              autocomplete="off"
+            ></el-input>
+          </el-form-item>
+
+          <el-form-item label="买入资金(元)" label-width="120px">
+            <el-input
+              v-model="(form.count * form.buyPrice).toFixed(2)"
+              autocomplete="off"
+              :disabled="true"
+            ></el-input>
+          </el-form-item>
+        </el-form>
+        <div slot="footer" class="dialog-footer">
+          <el-button type="primary" @click="buy"> 买入 </el-button>
+          <el-button @click="dialogFormVisible = false">取 消</el-button>
+        </div>
+      </el-dialog>
+    </div>
+  </body>
+</html>
+<script>
+  new Vue({
+    el: "#app",
+    data() {
+      return {
+        training: false,
+        // 下拉框的值
+        code: '',
+        codes: [],
+        // 日期选择框的值
+        pickerOptions: {
+          disabledDate(time) {
+            return time.getTime() > Date.now();
+          },
+          shortcuts: [
+            {
+              text: "今天",
+              onClick(picker) {
+                picker.$emit("pick", new Date());
+              },
+            },
+            {
+              text: "昨天",
+              onClick(picker) {
+                const date = new Date();
+                date.setTime(date.getTime() - 3600 * 1000 * 24);
+                picker.$emit("pick", date);
+              },
+            },
+            {
+              text: "一周前",
+              onClick(picker) {
+                const date = new Date();
+                date.setTime(date.getTime() - 3600 * 1000 * 24 * 7);
+                picker.$emit("pick", date);
+              },
+            },
+            {
+              text: "一月前",
+              onClick(picker) {
+                const date = new Date();
+                date.setTime(date.getTime() - 3600 * 1000 * 24 * 30);
+                picker.$emit("pick", date);
+              },
+            },
+          ],
+        },
+        date: "",
+        begin: 100000, // 初始资金
+        money: 100000, // 余额
+        charge: 0.1, // 手续费
+        dialogFormVisible: false, // 买入表单
+        form: {
+          count: 0,
+        },
+        today: {}, // 当天股票信息
+        records: [],
+        activeName: "first",
+        nextData: [],
+        chart: {}, // echarts 图表对象
+        chartData: {}, // 图表数据
+      };
+    },
+    created(){
+      this.queryCodes()
+    },
+    methods: {
+      start() {
+        this.training = true;
+        this.queryCodes();
+      },
+      // 显示股票 k 线图
+      showK() {
+        // 显示 k 线图
+        if (!this.code || !this.date) {
+
+          console.log("输入框没值");
+          return;
+        }
+        let _that = this;
+
+        let d = this.formatterDate(this.date);
+
+
+        fetch(
+          "http://localhost:8020/selectByEndTime?code=" +
+            this.code +
+            "&date=" +
+            d,
+          {
+            headers: {
+              "Content-Type": "application/json",
+            },
+            method: "GET",
+          }
+        )
+          .then((resp) => {
+            return resp.json();
+          })
+          .then((res) => {
+            _that.today = res[res.length - 1]; // 最后一条记录
+            _that.form.buyPrice = _that.today.close;
+            _that.form.num = _that.today.traded;
+            _that.initK(res); // 初始化K线图
+          });
+      },
+      // next 下一个k线
+      next() {
+        if (this.nextData.length > 0) {
+          // 用缓存的数据去渲染图表
+          this.today = this.nextData[0];
+          this.chartData.categoryData.push(this.nextData[0].date.split(" ")[0]);
+          this.chartData.values.push([
+            this.nextData[0].open,
+            this.nextData[0].close,
+            this.nextData[0].lowest,
+            this.nextData[0].highest,
+          ]);
+          // 渲染 K 线图
+          this.myChart(this.chart, this.chartData);
+          this.nextData.shift();
+        } else {
+          let code = this.today.code;
+ 
+          let d = this.today.date.split(" ")[0];
+          let _that = this;
+          // get 请求的参数在链接后使用 问号(?) 连接, key=value 多个参数之间使用 & 连接
+          fetch(
+            "http://localhost:8020/selectTime?code=" + code + "&date=" + d,
+            {
+              headers: {
+                "Content-Type": "application/json",
+              },
+              method: "GET",
+            }
+          )
+            .then((resp) => {
+              return resp.json();
+            })
+            .then((res) => {
+              if (res.length > 0) {
+                // 有数据
+                console.log(res);
+                if (res[0].date.split(" ")[0] == d) {
+                  // 删除第一条重复数据
+                  res.shift();
+                }
+                if (res.length > 0) {
+                  // 记录数据
+                  _that.nextData = res;
+
+                  // 获取下一天的数据
+                  _that.today = res[0];
+                  _that.chartData.categoryData.push(res[0].date.split(" ")[0]);
+                  _that.chartData.values.push([
+                    res[0].open,
+                    res[0].close,
+                    res[0].lowest,
+                    res[0].highest,
+                  ]);
+                  // 渲染 K 线图
+                  _that.myChart(_that.chart, _that.chartData);
+                  _that.nextData.shift();
+                } else {
+                  this.$message({
+                    message: "已无后续数据",
+                    type: "warning",
+                  });
+                }
+              } else {
+                this.$message({
+                  message: "已无后续数据",
+                  type: "warning",
+                });
+              }
+            });
+        }
+      },
+      // 买入
+      buy() {
+        this.maxnum = this.money / this.today.close
+        if (this.maxnum < this.form.count){
+          window.alert("购买股票金额大于剩余资产金额，请重新输入买入数量");
+          this.form.count = 0;
+          this.dialogFormVisible = true;
+          return;
+        }
+        
+        this.form.count = parseInt(this.form.count);
+        let data = {
+          code: this.today.code, // 股票代码
+          name: this.today.name, // 股票名称
+          price: this.today.close, // 股票价格
+          count: this.form.count, // 购买数量
+          now: new Date().toLocaleString(), // 交易时间
+          total: (this.form.count * this.today.close).toFixed(2), // 交易额
+          time: this.today.date.split(" ")[0],
+        };
+        console.log(data);
+        this.records.push(data);
+        this.money -= data.total;
+
+        this.dialogFormVisible = false;
+      },
+      // 卖出
+      sell() {
+        if (this.records.length == 0) {
+          window.alert("当前没有持有股票");
+          return;
+        }
+        let obj = this.records[0];
+
+        obj.last = this.today.close;
+        
+        let sell = this.today.close * obj.count;
+        
+        let charge = (sell * this.charge) / 100;
+
+        
+        let money = (sell - charge).toFixed(2);
+
+        let profit = (money - obj.price * obj.count).toFixed(2);
+
+        obj.profit = profit;
+        obj.charge = charge;
+        this.records = [obj];
+        this.money += parseInt(money);
+        
+      },
+      // 查询所有股票
+      queryCodes() {
+        fetch("http://localhost:8020/all", {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          method: "GET",
+        })
+          .then((resp) => {
+            if (!resp.ok) {
+              throw new Error('网络响应不正常');
+            }
+            return resp.json();
+          })
+          .then((resp) => {
+          if (!resp.ok) {
+            throw new Error('网络响应不正常');
+          }
+          return resp.json();
+        })
+        .then((res) => {
+          if (res && res.length > 0) {
+            this.codes = res;
+            // 可选：设置默认选中的第一个股票代码
+            if (res.length > 0) {
+              this.code = res[0].code;
+            }
+          } else {
+            console.warn("获取到的股票代码列表为空");
+            this.$message.warning("获取股票列表失败，数据为空");
+          }
+        })
+        .catch((error) => {
+          console.error("获取股票列表失败:", error);
+          this.$message.error("获取股票列表失败: " + error.message);
+          // 提供一些模拟数据作为后备
+          this.codes = [
+            { code: '000001', name: '平安银行' },
+            { code: '000002', name: '万科A' },
+            { code: '600000', name: '浦发银行' }
+          ];
+          this.$message.success("使用模拟数据（后端未连接）");
+        });
+      },
+      // 格式化日期()
+      formatterDate(date) {
+        let d = new Date(date.getTime());
+        let year = d.getFullYear(); 
+        let month = d.getMonth() + 1; 
+        month = month < 10 ? "0" + month : month; // 如果小于 10 在数字前面加 0
+        let day = d.getDate(); 
+        day = day < 10 ? "0" + day : day; 
+
+        return year + "-" + month + "-" + day;
+      },
+      // 第一次初始化 K 线图
+      initK(rawData) {
+        var chartDom = document.getElementById("echarts");
+        var myChart = echarts.init(chartDom, 'vintage');
+
+        this.chart = myChart;
+
+      
+        const categoryData = [];
+        const values = [];
+        for (var i = 0; i < rawData.length; i++) {
+          categoryData.push(rawData[i].date.split(" ")[0]);
+          values.push([
+            rawData[i].open,
+            rawData[i].close,
+            rawData[i].lowest,
+            rawData[i].highest,
+          ]);
+        }
+        const data0 = {
+          categoryData: categoryData,
+          values: values,
+        };
+        this.chartData = data0;
+        this.myChart(myChart, data0);
+      },
+      myChart(myChart, data0) {
+        var option;
+
+        const upColor = "#ec0000";
+        const upBorderColor = "#8A0000";
+        const downColor = "#00da3c";
+        const downBorderColor = "#008F28";
+
+        function calculateMA(dayCount) {
+          var result = [];
+          for (var i = 0, len = data0.values.length; i < len; i++) {
+            if (i < dayCount) {
+              result.push("-");
+              continue;
+            }
+            var sum = 0;
+            for (var j = 0; j < dayCount; j++) {
+              sum += +data0.values[i - j][1];
+            }
+            result.push((sum / dayCount).toFixed(2));
+          }
+          return result;
+        }
+
+        let title = "A公司";
+
+        if (data0.length > 0) {
+          title = this.today.name + " - " + this.today.code;
+        }
+        option = {
+          title: {
+            text: title,
+            left: 0,
+          },
+          tooltip: {
+            trigger: "axis",
+            axisPointer: {
+              type: "cross",
+            },
+          },
+          legend: {
+            data: ["日K", "MA5", "MA10", "MA20", "MA30"],
+          },
+          grid: {
+            left: "10%",
+            right: "10%",
+            bottom: "15%",
+          },
+          xAxis: {
+            type: "category",
+            data: data0.categoryData,
+            boundaryGap: false,
+            axisLine: {
+              onZero: false,
+            },
+            splitLine: {
+              show: false,
+            },
+            min: "dataMin",
+            max: "dataMax",
+          },
+          yAxis: {
+            scale: true,
+            splitArea: {
+              show: true,
+            },
+          },
+          dataZoom: [
+            {
+              type: "inside",
+              start: 0,
+              end: 100,
+            },
+            {
+              show: true,
+              type: "slider",
+              top: "90%",
+              start: 0,
+              end: 100,
+            },
+          ],
+          series: [
+            {
+              name: "日K",
+              type: "candlestick",
+              data: data0.values,
+              itemStyle: {
+                color: upColor,
+                color0: downColor,
+                borderColor: upBorderColor,
+                borderColor0: downBorderColor,
+              },
+              markPoint: {
+                label: {
+                  formatter: function (param) {
+                    return param != null ? Math.round(param.value) + "" : "";
+                  },
+                },
+                data: [
+                  {
+                    name: "highest value",
+                    type: "max",
+                    valueDim: "highest",
+                  },
+                  {
+                    name: "lowest value",
+                    type: "min",
+                    valueDim: "lowest",
+                  },
+                  {
+                    name: "average value on close",
+                    type: "average",
+                    valueDim: "close",
+                  },
+                ],
+                tooltip: {
+                  formatter: function (param) {
+                    return param.name + "<br>" + (param.data.coord || "");
+                  },
+                },
+              },
+              markLine: {
+                symbol: ["none", "none"],
+                data: [
+                  [
+                    {
+                      name: "from lowest to highest",
+                      type: "min",
+                      valueDim: "lowest",
+                      symbol: "circle",
+                      symbolSize: 10,
+                      label: {
+                        show: false,
+                      },
+                      emphasis: {
+                        label: {
+                          show: false,
+                        },
+                      },
+                    },
+                    {
+                      type: "max",
+                      valueDim: "highest",
+                      symbol: "circle",
+                      symbolSize: 10,
+                      label: {
+                        show: false,
+                      },
+                      emphasis: {
+                        label: {
+                          show: false,
+                        },
+                      },
+                    },
+                  ],
+                  {
+                    name: "min line on close",
+                    type: "min",
+                    valueDim: "close",
+                  },
+                  {
+                    name: "max line on close",
+                    type: "max",
+                    valueDim: "close",
+                  },
+                ],
+              },
+            },
+            {
+              name: "MA5",
+              type: "line",
+              data: calculateMA(5),
+              smooth: true,
+              lineStyle: {
+                opacity: 0.5,
+              },
+            },
+            {
+              name: "MA10",
+              type: "line",
+              data: calculateMA(10),
+              smooth: true,
+              lineStyle: {
+                opacity: 0.5,
+              },
+            },
+            {
+              name: "MA20",
+              type: "line",
+              data: calculateMA(20),
+              smooth: true,
+              lineStyle: {
+                opacity: 0.5,
+              },
+            },
+            {
+              name: "MA30",
+              type: "line",
+              data: calculateMA(30),
+              smooth: true,
+              lineStyle: {
+                opacity: 0.5,
+              },
+            },
+          ],
+        };
+
+        option && myChart.setOption(option);
+      },
+    },
+    mounted() {
+      this.queryCodes();
+    },
+  });
+</script>
